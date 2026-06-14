@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcoTrace — Carbon Footprint Tracker</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  /* ── Reset & base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --green-50:#EAF3DE; --green-100:#C0DD97; --green-200:#97C459;
+    --green-400:#639922; --green-600:#3B6D11; --green-800:#27500A;
+    --teal-50:#E1F5EE;  --teal-100:#9FE1CB;  --teal-400:#1D9E75; --teal-600:#0F6E56;
+    --amber-50:#FAEEDA; --amber-100:#FAC775; --amber-400:#BA7517; --amber-800:#633806;
+    --red-50:#FCEBEB;   --red-100:#F7C1C1;   --red-400:#E24B4A;  --red-800:#791F1F;
+    --blue-50:#E6F1FB;  --blue-100:#B5D4F4;  --blue-400:#378ADD; --blue-800:#0C447C;
+    --gray-50:#F1EFE8;  --gray-100:#D3D1C7;  --gray-400:#888780; --gray-600:#5F5E5A;
+
+    --bg-primary:#ffffff; --bg-secondary:#f6f6f4; --bg-tertiary:#f0efec;
+    --text-primary:#1a1a18; --text-secondary:#5f5e5a; --text-hint:#888780;
+    --border-light:rgba(0,0,0,0.08); --border-mid:rgba(0,0,0,0.14);
+    --radius-sm:6px; --radius-md:8px; --radius-lg:12px; --radius-xl:16px;
+    --font:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-primary:#1e1e1c; --bg-secondary:#272724; --bg-tertiary:#2e2e2b;
+      --text-primary:#f0efec; --text-secondary:#b4b2a9; --text-hint:#888780;
+      --border-light:rgba(255,255,255,0.07); --border-mid:rgba(255,255,255,0.13);
+    }
+  }
+  body { font-family: var(--font); background: var(--bg-tertiary); color: var(--text-primary); font-size:15px; line-height:1.6; min-height:100vh; }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+
+  /* ── Layout ── */
+  .shell { display:flex; min-height:100vh; }
+  .sidebar { width:220px; background:var(--bg-primary); border-right:0.5px solid var(--border-light); padding:1.5rem 1rem; display:flex; flex-direction:column; gap:4px; flex-shrink:0; position:sticky; top:0; height:100vh; }
+  .main { flex:1; padding:2rem; max-width:760px; }
+  @media(max-width:640px) {
+    .shell { flex-direction:column; }
+    .sidebar { width:100%; height:auto; flex-direction:row; flex-wrap:wrap; gap:2px; padding:0.75rem; position:static; border-right:none; border-bottom:0.5px solid var(--border-light); }
+    .sidebar .brand { display:none; }
+    .nav-item { flex:1; min-width:60px; justify-content:center; font-size:12px; padding:8px 6px; }
+    .main { padding:1rem; }
+  }
+
+  /* ── Brand ── */
+  .brand { display:flex; align-items:center; gap:10px; padding:4px 8px 1.25rem; border-bottom:0.5px solid var(--border-light); margin-bottom:8px; }
+  .brand-icon { width:32px; height:32px; background:var(--green-400); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .brand-icon i { color:#fff; font-size:17px; }
+  .brand-name { font-size:16px; font-weight:600; color:var(--text-primary); letter-spacing:-0.01em; }
+  .brand-tag { font-size:10px; color:var(--text-hint); font-weight:400; margin-top:-2px; }
+
+  /* ── Nav ── */
+  .nav-item { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:var(--radius-md); cursor:pointer; font-size:13px; color:var(--text-secondary); border:none; background:none; width:100%; text-align:left; transition:background .12s, color .12s; }
+  .nav-item:hover { background:var(--bg-secondary); color:var(--text-primary); }
+  .nav-item.active { background:var(--green-50); color:var(--green-600); font-weight:500; }
+  @media (prefers-color-scheme:dark) { .nav-item.active { background:rgba(99,153,34,0.15); } }
+  .nav-item i { font-size:17px; width:18px; flex-shrink:0; }
+  .nav-item:focus-visible { outline:2px solid var(--green-400); outline-offset:2px; }
+  .nav-spacer { flex:1; }
+
+  /* ── API key panel ── */
+  .api-panel { background:var(--bg-secondary); border-radius:var(--radius-md); padding:10px; border:0.5px solid var(--border-light); margin-top:4px; }
+  .api-label { font-size:10px; font-weight:500; color:var(--text-hint); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; display:flex; align-items:center; gap:4px; }
+  .api-label i { font-size:12px; }
+  .api-input-row { display:flex; gap:4px; }
+  .api-input { flex:1; min-width:0; padding:6px 8px; font-size:12px; border:0.5px solid var(--border-mid); border-radius:var(--radius-sm); background:var(--bg-primary); color:var(--text-primary); font-family:monospace; }
+  .api-input:focus { outline:2px solid var(--green-400); outline-offset:1px; }
+  .api-btn { padding:6px 10px; font-size:12px; border-radius:var(--radius-sm); border:none; background:var(--green-400); color:#fff; cursor:pointer; white-space:nowrap; }
+  .api-btn:hover { background:var(--green-600); }
+  .api-status { font-size:11px; margin-top:5px; display:flex; align-items:center; gap:4px; }
+  .api-status.ok { color:var(--green-600); }
+  .api-status.err { color:var(--red-400); }
+
+  /* ── Sections ── */
+  .section { display:none; }
+  .section.visible { display:block; }
+  .page-title { font-size:20px; font-weight:600; color:var(--text-primary); margin-bottom:4px; letter-spacing:-0.01em; }
+  .page-sub { font-size:13px; color:var(--text-secondary); margin-bottom:1.5rem; }
+
+  /* ── Metric cards ── */
+  .metric-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:1.25rem; }
+  .metric-card { background:var(--bg-secondary); border-radius:var(--radius-md); padding:14px 16px; }
+  .metric-label { font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:.05em; color:var(--text-hint); margin-bottom:6px; }
+  .metric-value { font-size:22px; font-weight:600; color:var(--text-primary); line-height:1.1; }
+  .metric-unit { font-size:12px; font-weight:400; color:var(--text-secondary); }
+  .metric-delta { font-size:12px; margin-top:5px; display:flex; align-items:center; gap:3px; }
+  .delta-good { color:var(--green-600); }
+  .delta-bad  { color:var(--red-400); }
+  .delta-neu  { color:var(--text-hint); }
+
+  /* ── Cards ── */
+  .card { background:var(--bg-primary); border:0.5px solid var(--border-light); border-radius:var(--radius-lg); padding:1.25rem; margin-bottom:1rem; }
+  .card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; }
+  .card-title { font-size:14px; font-weight:500; color:var(--text-primary); }
+
+  /* ── Badges ── */
+  .badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:500; padding:3px 8px; border-radius:20px; }
+  .badge-green { background:var(--green-50); color:var(--green-600); }
+  .badge-amber { background:var(--amber-50); color:var(--amber-400); }
+  .badge-red   { background:var(--red-50);   color:var(--red-800); }
+  .badge-blue  { background:var(--blue-50);  color:var(--blue-800); }
+  @media(prefers-color-scheme:dark) {
+    .badge-green { background:rgba(99,153,34,.15); }
+    .badge-amber { background:rgba(186,117,23,.15); }
+    .badge-red   { background:rgba(226,75,74,.15); }
+    .badge-blue  { background:rgba(55,138,221,.15); }
+  }
+
+  /* ── Category rows ── */
+  .category-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .category-row:last-child { margin-bottom:0; }
+  .cat-icon { width:30px; height:30px; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .cat-label { flex:1; min-width:0; }
+  .cat-name { font-size:13px; font-weight:500; }
+  .cat-detail { font-size:11px; color:var(--text-hint); }
+  .bar-track { height:6px; background:var(--bg-secondary); border-radius:3px; flex:2; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:3px; transition:width .5s ease; }
+  .cat-pct { font-size:12px; font-weight:500; color:var(--text-secondary); min-width:32px; text-align:right; }
+
+  /* ── Tip bar ── */
+  .tip-bar { background:var(--teal-50); border:0.5px solid var(--teal-100); border-radius:var(--radius-md); padding:12px 14px; display:flex; gap:10px; align-items:flex-start; margin-bottom:1rem; }
+  .tip-bar i { color:var(--teal-600); flex-shrink:0; margin-top:2px; font-size:16px; }
+  .tip-text { font-size:13px; color:var(--text-primary); line-height:1.5; }
+  @media(prefers-color-scheme:dark) { .tip-bar { background:rgba(29,158,117,.1); border-color:rgba(29,158,117,.2); } }
+
+  /* ── Streak ── */
+  .streak-row { display:flex; gap:6px; margin-bottom:1rem; flex-wrap:wrap; }
+  .streak-day { width:34px; height:34px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:500; flex-direction:column; gap:1px; }
+  .streak-day.done { background:var(--green-400); color:#fff; }
+  .streak-day.today { background:var(--green-50); border:1.5px solid var(--green-400); color:var(--green-600); }
+  .streak-day.miss { background:var(--bg-secondary); color:var(--text-hint); }
+
+  /* ── Progress ── */
+  .goal-label { display:flex; justify-content:space-between; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
+  .progress-track { height:8px; background:var(--bg-secondary); border-radius:4px; overflow:hidden; }
+  .progress-fill { height:100%; border-radius:4px; transition:width .6s ease; }
+
+  /* ── Sliders ── */
+  .slider-group { margin-bottom:1.25rem; }
+  .slider-label { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+  .slider-name { font-size:13px; font-weight:500; color:var(--text-primary); display:flex; align-items:center; gap:6px; }
+  .slider-name i { font-size:15px; color:var(--text-secondary); }
+  .slider-val { font-size:13px; font-weight:600; color:var(--green-400); }
+  input[type=range] { width:100%; accent-color:var(--green-400); cursor:pointer; }
+
+  /* ── Actions ── */
+  .action-list { display:grid; gap:8px; }
+  .action-item { display:flex; align-items:flex-start; gap:12px; padding:12px; border:0.5px solid var(--border-light); border-radius:var(--radius-md); cursor:pointer; transition:background .1s; }
+  .action-item:hover { background:var(--bg-secondary); }
+  .action-item.done { opacity:.7; }
+  .action-check { width:20px; height:20px; border:1.5px solid var(--border-mid); border-radius:50%; flex-shrink:0; margin-top:2px; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+  .action-item.done .action-check { background:var(--green-400); border-color:var(--green-400); }
+  .action-item.done .action-check i { color:#fff; font-size:11px; }
+  .action-body { flex:1; min-width:0; }
+  .action-title { font-size:13px; font-weight:500; display:flex; align-items:center; gap:6px; }
+  .action-title i { font-size:15px; color:var(--text-secondary); }
+  .action-desc { font-size:12px; color:var(--text-secondary); margin-top:2px; }
+  .action-impact { font-size:11px; font-weight:600; color:var(--green-600); background:var(--green-50); padding:2px 8px; border-radius:10px; white-space:nowrap; flex-shrink:0; align-self:center; }
+  @media(prefers-color-scheme:dark) { .action-impact { background:rgba(99,153,34,.15); } }
+
+  /* ── Insights ── */
+  .insight-row { display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:0.5px solid var(--border-light); }
+  .insight-row:last-child { border-bottom:none; padding-bottom:0; }
+  .insight-icon { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .insight-text { font-size:13px; color:var(--text-primary); line-height:1.5; }
+  .insight-sub { font-size:12px; color:var(--text-secondary); margin-top:3px; }
+
+  /* ── Compare grid ── */
+  .compare-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:1rem; }
+  .compare-card { background:var(--bg-secondary); border-radius:var(--radius-md); padding:14px; }
+  .compare-card.highlight { background:var(--green-50); border:0.5px solid var(--green-100); }
+  @media(prefers-color-scheme:dark) { .compare-card.highlight { background:rgba(99,153,34,.12); border-color:rgba(99,153,34,.25); } }
+  .compare-label { font-size:11px; color:var(--text-hint); margin-bottom:4px; }
+  .compare-val { font-size:22px; font-weight:600; }
+  .compare-sub { font-size:11px; color:var(--text-secondary); margin-top:2px; }
+
+  /* ── Chart ── */
+  .chart-wrap { position:relative; width:100%; height:220px; margin:1rem 0 0; }
+
+  /* ── AI Chat ── */
+  .ai-chat { display:flex; flex-direction:column; gap:0; }
+  .chat-history { min-height:120px; max-height:380px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:4px 0 12px; }
+  .chat-msg { display:flex; gap:10px; align-items:flex-start; }
+  .chat-msg.user { flex-direction:row-reverse; }
+  .chat-avatar { width:28px; height:28px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; }
+  .chat-avatar.ai { background:var(--green-50); color:var(--green-600); }
+  .chat-avatar.user-av { background:var(--blue-50); color:var(--blue-800); }
+  .chat-bubble { max-width:82%; padding:10px 13px; border-radius:var(--radius-lg); font-size:13px; line-height:1.6; }
+  .chat-bubble.ai { background:var(--bg-secondary); color:var(--text-primary); border-radius:4px var(--radius-lg) var(--radius-lg) var(--radius-lg); }
+  .chat-bubble.user { background:var(--green-400); color:#fff; border-radius:var(--radius-lg) 4px var(--radius-lg) var(--radius-lg); }
+  .chat-bubble.loading { color:var(--text-hint); font-style:italic; }
+  .chat-input-row { display:flex; gap:8px; margin-top:10px; }
+  .chat-input { flex:1; padding:10px 14px; font-size:13px; border:0.5px solid var(--border-mid); border-radius:var(--radius-lg); background:var(--bg-primary); color:var(--text-primary); font-family:var(--font); resize:none; height:42px; line-height:1.5; }
+  .chat-input:focus { outline:2px solid var(--green-400); outline-offset:1px; }
+  .chat-send { padding:10px 16px; background:var(--green-400); color:#fff; border:none; border-radius:var(--radius-lg); cursor:pointer; font-size:13px; font-weight:500; white-space:nowrap; }
+  .chat-send:hover { background:var(--green-600); }
+  .chat-send:disabled { opacity:.5; cursor:not-allowed; }
+  .chat-send:focus-visible { outline:2px solid var(--green-400); outline-offset:2px; }
+  .quick-prompts { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .quick-btn { padding:5px 11px; font-size:12px; border:0.5px solid var(--border-mid); border-radius:20px; background:none; color:var(--text-secondary); cursor:pointer; transition:all .1s; }
+  .quick-btn:hover { background:var(--bg-secondary); color:var(--text-primary); border-color:var(--green-400); }
+  .quick-btn:focus-visible { outline:2px solid var(--green-400); outline-offset:2px; }
+
+  /* ── Divider ── */
+  .divider { height:0.5px; background:var(--border-light); margin:1.25rem 0; }
+
+  /* ── Buttons ── */
+  .btn { padding:9px 18px; border-radius:var(--radius-md); font-size:13px; font-weight:500; cursor:pointer; border:0.5px solid var(--border-mid); background:transparent; color:var(--text-primary); transition:background .1s; font-family:var(--font); }
+  .btn:hover { background:var(--bg-secondary); }
+  .btn-primary { background:var(--green-400); color:#fff; border-color:var(--green-400); }
+  .btn-primary:hover { background:var(--green-600); }
+  .btn:focus-visible { outline:2px solid var(--green-400); outline-offset:2px; }
+  .btn-full { width:100%; text-align:center; }
+  .save-confirm { font-size:12px; color:var(--green-600); margin-top:8px; display:none; align-items:center; gap:4px; justify-content:flex-end; }
+
+  /* ── Legend ── */
+  .legend { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; font-size:12px; color:var(--text-secondary); margin-top:6px; }
+  .legend span { display:flex; align-items:center; gap:5px; }
+  .legend-swatch { width:10px; height:10px; border-radius:2px; display:inline-block; }
+</style>
+</head>
+<body>
+<h1 class="sr-only">EcoTrace — personal carbon footprint tracker</h1>
+
+<div class="shell">
+  <!-- Sidebar nav -->
+  <nav class="sidebar" role="navigation" aria-label="Main navigation">
+    <div class="brand">
+      <div class="brand-icon"><i class="ti ti-leaf" aria-hidden="true"></i></div>
+      <div>
+        <div class="brand-name">EcoTrace</div>
+        <div class="brand-tag">Carbon companion</div>
+      </div>
+    </div>
+
+    <button class="nav-item active" onclick="switchTab('dashboard',this)" role="tab" aria-selected="true" aria-controls="section-dashboard">
+      <i class="ti ti-home" aria-hidden="true"></i> Dashboard
+    </button>
+    <button class="nav-item" onclick="switchTab('log',this)" role="tab" aria-selected="false" aria-controls="section-log">
+      <i class="ti ti-edit" aria-hidden="true"></i> Log activity
+    </button>
+    <button class="nav-item" onclick="switchTab('actions',this)" role="tab" aria-selected="false" aria-controls="section-actions">
+      <i class="ti ti-bolt" aria-hidden="true"></i> Daily actions
+    </button>
+    <button class="nav-item" onclick="switchTab('insights',this)" role="tab" aria-selected="false" aria-controls="section-insights">
+      <i class="ti ti-chart-bar" aria-hidden="true"></i> Insights
+    </button>
+    <button class="nav-item" onclick="switchTab('ai',this)" role="tab" aria-selected="false" aria-controls="section-ai">
+      <i class="ti ti-robot" aria-hidden="true"></i> AI advisor
+    </button>
+
+    <div class="nav-spacer"></div>
+
+    <!-- API key entry -->
+    <div class="api-panel">
+      <div class="api-label"><i class="ti ti-key" aria-hidden="true"></i> Gemini API key</div>
+      <div class="api-input-row">
+        <input type="password" class="api-input" id="api-key-input" placeholder="AIza..." aria-label="Gemini API key" autocomplete="off">
+        <button class="api-btn" onclick="saveApiKey()" aria-label="Save API key">Save</button>
+      </div>
+      <div class="api-status" id="api-status" aria-live="polite"></div>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <main class="main" id="main-content">
+
+    <!-- ── DASHBOARD ── -->
+    <section id="section-dashboard" class="section visible" role="tabpanel" aria-labelledby="tab-dashboard">
+      <div class="page-title">Your footprint</div>
+      <div class="page-sub">Based on your logged activity — updated as you go</div>
+
+      <div class="metric-grid" role="list" aria-label="Key metrics">
+        <div class="metric-card" role="listitem">
+          <div class="metric-label">This month</div>
+          <div class="metric-value">3.2 <span class="metric-unit">t CO₂e</span></div>
+          <div class="metric-delta delta-good"><i class="ti ti-trending-down" aria-hidden="true"></i> 8% vs last month</div>
+        </div>
+        <div class="metric-card" role="listitem">
+          <div class="metric-label">Daily average</div>
+          <div class="metric-value">106 <span class="metric-unit">kg</span></div>
+          <div class="metric-delta delta-good"><i class="ti ti-check" aria-hidden="true"></i> On track</div>
+        </div>
+        <div class="metric-card" role="listitem">
+          <div class="metric-label">Actions done</div>
+          <div class="metric-value" id="metric-actions">0 <span class="metric-unit">/ 8</span></div>
+          <div class="metric-delta delta-neu">This week</div>
+        </div>
+      </div>
+
+      <div class="tip-bar" role="note" aria-label="Daily tip">
+        <i class="ti ti-bulb" aria-hidden="true"></i>
+        <span class="tip-text" id="daily-tip">Loading today's tip…</span>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Emissions by category</span>
+          <span class="badge badge-amber">Above target</span>
+        </div>
+        <div id="category-breakdown" role="list" aria-label="Emissions breakdown by category"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">7-day streak</span>
+          <span class="badge badge-green"><i class="ti ti-flame" aria-hidden="true"></i> 5 days</span>
+        </div>
+        <div class="streak-row" role="list" aria-label="Activity streak">
+          <div class="streak-day done" role="listitem" aria-label="Monday — logged"><i class="ti ti-check" aria-hidden="true"></i><span>M</span></div>
+          <div class="streak-day done" role="listitem" aria-label="Tuesday — logged"><i class="ti ti-check" aria-hidden="true"></i><span>T</span></div>
+          <div class="streak-day done" role="listitem" aria-label="Wednesday — logged"><i class="ti ti-check" aria-hidden="true"></i><span>W</span></div>
+          <div class="streak-day done" role="listitem" aria-label="Thursday — logged"><i class="ti ti-check" aria-hidden="true"></i><span>T</span></div>
+          <div class="streak-day done" role="listitem" aria-label="Friday — logged"><i class="ti ti-check" aria-hidden="true"></i><span>F</span></div>
+          <div class="streak-day miss" role="listitem" aria-label="Saturday — missed"><span>S</span></div>
+          <div class="streak-day today" role="listitem" aria-current="date" aria-label="Today — Sunday"><span>S</span></div>
+        </div>
+        <div class="goal-label"><span>Monthly goal: 3.0 t CO₂e</span><span>3.2 / 3.0 t</span></div>
+        <div class="progress-track" role="progressbar" aria-valuenow="107" aria-valuemin="0" aria-valuemax="100" aria-label="Monthly goal: 107% of target used">
+          <div class="progress-fill" style="width:100%;background:linear-gradient(90deg,var(--amber-100),var(--amber-400))"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text-hint);margin-top:5px">0.2 t above goal — complete 3 daily actions to close the gap</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Daily emissions — last 7 days</span></div>
+        <div class="chart-wrap">
+          <canvas id="trendChart" role="img" aria-label="Bar chart: Mon 142, Tue 98, Wed 115, Thu 88, Fri 103, Sat 126, Sun 95 kg CO2e. Goal line at 100 kg.">Emissions this week: Mon 142kg, Tue 98kg, Wed 115kg, Thu 88kg, Fri 103kg, Sat 126kg, Sun 95kg.</canvas>
+        </div>
+        <div class="legend">
+          <span><span class="legend-swatch" style="background:#639922"></span>Your emissions</span>
+          <span><span class="legend-swatch" style="background:#D3D1C7"></span>Daily goal</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── LOG ACTIVITY ── -->
+    <section id="section-log" class="section" role="tabpanel" aria-labelledby="tab-log">
+      <div class="page-title">Log today's activity</div>
+      <div class="page-sub">Adjust sliders to match your day — your footprint updates instantly</div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title"><i class="ti ti-car" aria-hidden="true"></i> Transport</span></div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span class="slider-name"><i class="ti ti-car" aria-hidden="true"></i> Car distance (km/day)</span>
+            <span class="slider-val" id="v-car">20 km</span>
+          </div>
+          <input type="range" min="0" max="200" step="5" value="20" aria-label="Car distance km per day" oninput="updateSlider('car',this.value,'km')">
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span class="slider-name"><i class="ti ti-plane" aria-hidden="true"></i> Flights (hours this month)</span>
+            <span class="slider-val" id="v-flight">2 hrs</span>
+          </div>
+          <input type="range" min="0" max="80" step="1" value="2" aria-label="Flight hours this month" oninput="updateSlider('flight',this.value,'hrs')">
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span class="slider-name"><i class="ti ti-bus" aria-hidden="true"></i> Public transit (km/day)</span>
+            <span class="slider-val" id="v-transit">5 km</span>
+          </div>
+          <input type="range" min="0" max="100" step="5" value="5" aria-label="Public transit km per day" oninput="updateSlider('transit',this.value,'km')">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title"><i class="ti ti-bolt" aria-hidden="true"></i> Home energy</span></div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span class="slider-name"><i class="ti ti-bolt" aria-hidden="true"></i> Electricity (kWh/month)</span>
+            <span class="slider-val" id="v-elec">200 kWh</span>
+          </div>
+          <input type="range" min="0" max="1000" step="10" value="200" aria-label="Monthly electricity kWh" oninput="updateSlider('elec',this.value,'kWh')">
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span class="slider-name"><i class="ti ti-flame" aria-hidden="true"></i> Gas heating (kWh/month)</span>
+            <span class="slider-val" id="v-gas">150 kWh</span>
+          </div>
+          <input type="range" min="0" max="600" step="10" value="150" aria-label="Monthly gas kWh" oninput="updateSlider('gas',this.value,'kWh')">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title"><i class="ti ti-apple" aria-hidden="true"></i> Food</span></div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span class="slider-name"><i class="ti ti-meat" aria-hidden="true"></i> Meat meals per week</span>
+            <span class="slider-val" id="v-meat">4 meals</span>
+          </div>
+          <input type="range" min="0" max="21" step="1" value="4" aria-label="Meat meals per week" oninput="updateSlider('meat',this.value,'meals')">
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span class="slider-name"><i class="ti ti-plant" aria-hidden="true"></i> Local / seasonal food</span>
+            <span class="slider-val" id="v-local" style="color:var(--green-400)">Sometimes</span>
+          </div>
+          <input type="range" min="0" max="2" step="1" value="1" aria-label="Frequency of local seasonal food: 0 rarely, 1 sometimes, 2 often" oninput="updateLocalLabel(this.value)">
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+        <div class="save-confirm" id="save-confirm" role="status" aria-live="polite">
+          <i class="ti ti-check" aria-hidden="true"></i> Saved for today
+        </div>
+        <button class="btn btn-primary" onclick="saveLog()" aria-label="Save today's activity log">Save activity log</button>
+      </div>
+    </section>
+
+    <!-- ── DAILY ACTIONS ── -->
+    <section id="section-actions" class="section" role="tabpanel" aria-labelledby="tab-actions">
+      <div class="page-title">Daily actions</div>
+      <div class="page-sub">Check off what you've done today — every action counts</div>
+
+      <div class="tip-bar">
+        <i class="ti ti-target" aria-hidden="true"></i>
+        <span class="tip-text">Small consistent actions compound. Completing all 8 today saves ~14 kg CO₂.</span>
+      </div>
+
+      <div class="action-list" id="action-list" role="list" aria-label="Carbon reduction actions"></div>
+
+      <div class="divider"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;color:var(--text-secondary)">Total savings today</span>
+        <span style="font-size:16px;font-weight:600;color:var(--green-400)" id="total-savings" aria-live="polite">0.0 kg CO₂</span>
+      </div>
+    </section>
+
+    <!-- ── INSIGHTS ── -->
+    <section id="section-insights" class="section" role="tabpanel" aria-labelledby="tab-insights">
+      <div class="page-title">Insights</div>
+      <div class="page-sub">How you compare and where to focus</div>
+
+      <div class="compare-grid" role="list" aria-label="Footprint comparisons">
+        <div class="compare-card" role="listitem">
+          <div class="compare-label">Your footprint</div>
+          <div class="compare-val" style="color:var(--text-primary)">3.2 t</div>
+          <div class="compare-sub">CO₂e this month</div>
+        </div>
+        <div class="compare-card highlight" role="listitem">
+          <div class="compare-label">1.5°C monthly budget</div>
+          <div class="compare-val" style="color:var(--green-400)">2.5 t</div>
+          <div class="compare-sub">Science-aligned target</div>
+        </div>
+        <div class="compare-card" role="listitem">
+          <div class="compare-label">India average</div>
+          <div class="compare-val" style="color:var(--text-primary)">1.9 t</div>
+          <div class="compare-sub">per person / month</div>
+        </div>
+        <div class="compare-card" role="listitem">
+          <div class="compare-label">Global average</div>
+          <div class="compare-val" style="color:var(--text-primary)">3.8 t</div>
+          <div class="compare-sub">per person / month</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Biggest opportunities</span></div>
+        <div id="insights-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">6-month trend</span></div>
+        <div class="chart-wrap">
+          <canvas id="trendMonthly" role="img" aria-label="Line chart: emissions fell from 4.1t in January to 3.2t in June. 1.5°C path target line shown.">Monthly emissions: Jan 4.1t, Feb 3.9t, Mar 3.6t, Apr 3.5t, May 3.4t, Jun 3.2t.</canvas>
+        </div>
+        <div class="legend">
+          <span><span class="legend-swatch" style="background:#639922"></span>Your trend</span>
+          <span><span class="legend-swatch" style="background:#D3D1C7;border-top:2px dashed #D3D1C7;height:0;width:14px"></span>1.5°C path</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── AI ADVISOR ── -->
+    <section id="section-ai" class="section" role="tabpanel" aria-labelledby="tab-ai">
+      <div class="page-title">AI advisor</div>
+      <div class="page-sub">Powered by Gemini — ask anything about your carbon footprint</div>
+
+      <div class="card ai-chat">
+        <div class="quick-prompts" aria-label="Quick prompt suggestions">
+          <button class="quick-btn" onclick="sendQuick('Give me a personalised 30-day plan to cut my carbon footprint by 20%')" aria-label="Quick prompt: 30-day reduction plan">30-day plan</button>
+          <button class="quick-btn" onclick="sendQuick('What are the 3 easiest wins for reducing my transport emissions?')" aria-label="Quick prompt: transport wins">Easy transport wins</button>
+          <button class="quick-btn" onclick="sendQuick('How does my footprint compare to others in Bengaluru, India?')" aria-label="Quick prompt: local comparison">Compare locally</button>
+          <button class="quick-btn" onclick="sendQuick('What is the carbon impact of switching to an electric vehicle?')" aria-label="Quick prompt: EV impact">EV impact</button>
+          <button class="quick-btn" onclick="sendQuick('Suggest 5 plant-based meal swaps that are popular in Indian cuisine')" aria-label="Quick prompt: plant-based meals">Plant-based swaps</button>
+        </div>
+
+        <div class="chat-history" id="chat-history" role="log" aria-live="polite" aria-label="Conversation with AI advisor">
+          <div class="chat-msg">
+            <div class="chat-avatar ai" aria-hidden="true">AI</div>
+            <div class="chat-bubble ai">Hi! I'm your EcoTrace AI advisor, powered by Gemini. I can help you understand your carbon footprint, suggest personalised actions, and answer any climate questions. What would you like to explore?</div>
+          </div>
+        </div>
+
+        <div class="chat-input-row">
+          <textarea class="chat-input" id="chat-input" placeholder="Ask about your footprint…" aria-label="Chat message" rows="1" onkeydown="handleChatKey(event)"></textarea>
+          <button class="chat-send" id="chat-send" onclick="sendChat()" aria-label="Send message">
+            <i class="ti ti-send" aria-hidden="true"></i> Send
+          </button>
+        </div>
+        <div style="font-size:11px;color:var(--text-hint);margin-top:6px;text-align:center">
+          Your API key stays in memory only — never stored or sent anywhere except Gemini.
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+/* ── Data ── */
+const CATEGORIES = [
+  {id:'transport',label:'Transport',icon:'ti-car',color:'#E24B4A',bg:'#FCEBEB',detail:'Driving + flights',value:42},
+  {id:'food',label:'Food & diet',icon:'ti-apple',color:'#BA7517',bg:'#FAEEDA',detail:'Meat, dairy, produce',value:26},
+  {id:'home',label:'Home energy',icon:'ti-bolt',color:'#378ADD',bg:'#E6F1FB',detail:'Electricity & gas',value:22},
+  {id:'goods',label:'Goods & services',icon:'ti-shopping-bag',color:'#1D9E75',bg:'#E1F5EE',detail:'Shopping & lifestyle',value:10},
+];
+
+const ACTIONS = [
+  {id:'a1',title:'Walk or cycle today',desc:'Skip the car for any trip under 3 km',impact:2.8,icon:'ti-bike'},
+  {id:'a2',title:'Eat a plant-based meal',desc:'Replace one meat dish with vegetables or legumes',impact:1.6,icon:'ti-leaf'},
+  {id:'a3',title:'Short shower (under 5 min)',desc:'Saves water-heating energy significantly',impact:0.5,icon:'ti-droplet'},
+  {id:'a4',title:'Turn off standby devices',desc:'Unplug TVs, chargers, gaming consoles when not in use',impact:0.3,icon:'ti-plug'},
+  {id:'a5',title:'Line-dry laundry',desc:'Skip the tumble dryer for one load',impact:1.8,icon:'ti-wind'},
+  {id:'a6',title:'Local seasonal meal',desc:'Reduces transport and cold-chain emissions',impact:0.9,icon:'ti-plant'},
+  {id:'a7',title:'Use public transit',desc:'Bus or train instead of driving today',impact:3.2,icon:'ti-bus'},
+  {id:'a8',title:'Work from home',desc:'Eliminate your commute emissions entirely',impact:4.1,icon:'ti-home'},
+];
+
+const INSIGHTS = [
+  {icon:'ti-car',bg:'#FCEBEB',ic:'#A32D2D',title:'Transport is 42% of your footprint',sub:'Higher than the 30% average. Substituting 2 car days/week with transit saves ~0.9 t/year.',badge:'badge-red',badgeText:'High impact'},
+  {icon:'ti-plane',bg:'#FAEEDA',ic:'#854F0B',title:'2 hours of flights adds ~180 kg CO₂',sub:'Consider video calls for one trip this quarter or offset through a verified project.',badge:'badge-amber',badgeText:'Medium impact'},
+  {icon:'ti-meat',bg:'#EAF3DE',ic:'#3B6D11',title:'Cutting to 2 meat meals/week saves 200 kg/year',sub:'You average 4 meals. Indian cuisine has excellent plant-based options — dal, sabzi, rajma.',badge:'badge-green',badgeText:'Easy win'},
+  {icon:'ti-sun',bg:'#E6F1FB',ic:'#185FA5',title:'Solar could cut your home energy by 60%',sub:'At 200 kWh/month, a Bengaluru rooftop install pays back in approximately 5–6 years.',badge:'badge-blue',badgeText:'Long-term'},
+];
+
+const TIPS = [
+  'A 5-minute shorter shower saves ~0.5 kg CO₂ per day — 180 kg over a year.',
+  'Choosing dal over chicken saves up to 5 kg CO₂ per meal.',
+  'LED bulbs use 75% less energy than incandescents — swap once, benefit for years.',
+  'Buying second-hand clothes saves 80% of the carbon cost vs new fast fashion.',
+  'Eating local seasonal produce cuts food transport emissions by up to 50%.',
+  'Turning off the AC 30 min before you leave saves ~0.4 kg CO₂ per hour.',
+  'A reusable bag replaces ~1,000 plastic bags over its lifetime.',
+];
+
+/* ── State ── */
+let checkedActions = new Set();
+let geminiKey = '';
+let chatHistory = [];
+
+/* ── Tab switching ── */
+function switchTab(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('visible'));
+  document.querySelectorAll('.nav-item').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
+  document.getElementById('section-' + id).classList.add('visible');
+  btn.classList.add('active');
+  btn.setAttribute('aria-selected','true');
+  document.getElementById('main-content').scrollTop = 0;
+}
+
+/* ── Render categories ── */
+function renderCategories() {
+  const el = document.getElementById('category-breakdown');
+  el.innerHTML = CATEGORIES.map(c => `
+    <div class="category-row" role="listitem">
+      <div class="cat-icon" style="background:${c.bg}">
+        <i class="ti ${c.icon}" aria-hidden="true" style="color:${c.color};font-size:15px"></i>
+      </div>
+      <div class="cat-label">
+        <div class="cat-name">${c.label}</div>
+        <div class="cat-detail">${c.detail}</div>
+      </div>
+      <div class="bar-track" role="presentation">
+        <div class="bar-fill" style="width:${c.value}%;background:${c.color}55"></div>
+      </div>
+      <div class="cat-pct" aria-label="${c.value} percent">${c.value}%</div>
+    </div>
+  `).join('');
+}
+
+/* ── Render actions ── */
+function renderActions() {
+  const el = document.getElementById('action-list');
+  el.innerHTML = ACTIONS.map(a => {
+    const done = checkedActions.has(a.id);
+    return `
+    <div class="action-item ${done ? 'done' : ''}" role="listitem"
+         onclick="toggleAction('${a.id}')"
+         tabindex="0"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAction('${a.id}')}"
+         aria-pressed="${done}">
+      <div class="action-check" aria-hidden="true">${done ? '<i class="ti ti-check"></i>' : ''}</div>
+      <div class="action-body">
+        <div class="action-title"><i class="ti ${a.icon}" aria-hidden="true"></i> ${a.title}</div>
+        <div class="action-desc">${a.desc}</div>
+      </div>
+      <div class="action-impact" aria-label="saves ${a.impact} kg">−${a.impact} kg</div>
+    </div>`;
+  }).join('');
+  updateActionMetrics();
+}
+
+function toggleAction(id) {
+  checkedActions.has(id) ? checkedActions.delete(id) : checkedActions.add(id);
+  renderActions();
+}
+
+function updateActionMetrics() {
+  const savings = ACTIONS.filter(a => checkedActions.has(a.id)).reduce((s,a) => s + a.impact, 0);
+  document.getElementById('total-savings').textContent = savings.toFixed(1) + ' kg CO₂';
+  document.getElementById('metric-actions').innerHTML =
+    checkedActions.size + ' <span class="metric-unit">/ ' + ACTIONS.length + '</span>';
+}
+
+/* ── Render insights ── */
+function renderInsights() {
+  document.getElementById('insights-list').innerHTML = INSIGHTS.map(i => `
+    <div class="insight-row">
+      <div class="insight-icon" style="background:${i.bg}">
+        <i class="ti ${i.icon}" aria-hidden="true" style="color:${i.ic};font-size:15px"></i>
+      </div>
+      <div style="flex:1">
+        <div class="insight-text">${i.title} <span class="badge ${i.badge}">${i.badgeText}</span></div>
+        <div class="insight-sub">${i.sub}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ── Sliders ── */
+function updateSlider(key, val, unit) {
+  document.getElementById('v-' + key).textContent = Math.round(val) + ' ' + unit;
+}
+
+function updateLocalLabel(val) {
+  document.getElementById('v-local').textContent = ['Rarely','Sometimes','Often'][parseInt(val)];
+}
+
+/* ── Save log ── */
+function saveLog() {
+  const confirm = document.getElementById('save-confirm');
+  confirm.style.display = 'flex';
+  setTimeout(() => { confirm.style.display = 'none'; }, 2500);
+}
+
+/* ── Daily tip ── */
+function initTip() {
+  document.getElementById('daily-tip').textContent = TIPS[Math.floor(Math.random() * TIPS.length)];
+}
+
+/* ── Charts ── */
+function initCharts() {
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const tc = isDark ? '#888780' : '#888780';
+  const gc = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+
+  new Chart(document.getElementById('trendChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+      datasets: [
+        { label:'Emissions (kg)', data:[142,98,115,88,103,126,95], backgroundColor:'#639922', borderRadius:4 },
+        { label:'Daily goal', data:[100,100,100,100,100,100,100], type:'line', borderColor:'#D3D1C7', borderDash:[4,4], borderWidth:2, pointRadius:0, fill:false }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: c => c.dataset.label + ': ' + Math.round(c.parsed.y) + ' kg' } } },
+      scales:{
+        x:{ ticks:{ color:tc, font:{size:11} }, grid:{ color:gc }, border:{display:false} },
+        y:{ ticks:{ color:tc, font:{size:11}, callback: v => v+'kg' }, grid:{ color:gc }, border:{display:false} }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('trendMonthly'), {
+    type: 'line',
+    data: {
+      labels: ['Jan','Feb','Mar','Apr','May','Jun'],
+      datasets: [
+        { label:'Your emissions', data:[4.1,3.9,3.6,3.5,3.4,3.2], borderColor:'#639922', backgroundColor:'rgba(99,153,34,0.07)', tension:.35, fill:true, pointBackgroundColor:'#639922', pointRadius:4 },
+        { label:'1.5°C path', data:[4.0,3.8,3.6,3.4,3.2,3.0], borderColor:'#D3D1C7', borderDash:[5,5], tension:.3, fill:false, pointRadius:0 }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: c => c.dataset.label + ': ' + c.parsed.y.toFixed(1) + ' t' } } },
+      scales:{
+        x:{ ticks:{ color:tc, font:{size:11} }, grid:{ color:gc }, border:{display:false} },
+        y:{ ticks:{ color:tc, font:{size:11}, callback: v => v.toFixed(1)+'t' }, grid:{ color:gc }, border:{display:false}, min:2.5, max:4.5 }
+      }
+    }
+  });
+}
+
+/* ── API key ── */
+function saveApiKey() {
+  const input = document.getElementById('api-key-input');
+  const key = input.value.trim();
+  const status = document.getElementById('api-status');
+  if (!key.startsWith('AIza') || key.length < 20) {
+    status.className = 'api-status err';
+    status.innerHTML = '<i class="ti ti-x" aria-hidden="true"></i> Invalid key format';
+    return;
+  }
+  geminiKey = key;
+  input.value = '••••••••••••••••';
+  status.className = 'api-status ok';
+  status.innerHTML = '<i class="ti ti-check" aria-hidden="true"></i> Key saved — AI advisor ready';
+}
+
+/* ── Gemini chat ── */
+function buildUserContext() {
+  return `The user is tracking their carbon footprint with EcoTrace. Their current data:
+- Monthly emissions: 3.2 tonnes CO2e (8% lower than last month)
+- Transport: 42% of footprint (car ~20km/day, 2hrs flights/month)
+- Home energy: 22% (200 kWh electricity, 150 kWh gas/month)
+- Food: 26% (about 4 meat meals/week, sometimes eats local/seasonal)
+- Goods & services: 10%
+- Location: Bengaluru, India
+- Actions completed today: ${checkedActions.size} out of 8
+They are trying to reduce their footprint toward the 1.5°C-aligned budget of 2.5t/month.
+Please give specific, actionable, friendly advice relevant to their data and location.`;
+}
+
+async function callGemini(userMessage) {
+  if (!geminiKey) throw new Error('No API key set. Please enter your Gemini API key in the sidebar.');
+
+  const context = buildUserContext();
+  const messages = [
+    { role:'user', parts:[{ text: context + '\n\nUser question: ' + userMessage }] },
+  ];
+
+  // Include prior chat history (last 6 turns max for efficiency)
+  const historyToSend = chatHistory.slice(-6).map(m => ({
+    role: m.role === 'user' ? 'user' : 'model',
+    parts: [{ text: m.content }]
+  }));
+
+  const body = {
+    contents: [
+      { role:'user', parts:[{ text: context }] },
+      { role:'model', parts:[{ text: 'Understood. I have your EcoTrace data. How can I help you reduce your carbon footprint?' }] },
+      ...historyToSend,
+      { role:'user', parts:[{ text: userMessage }] }
+    ],
+    generationConfig: { temperature: 0.7, maxOutputTokens: 600 }
+  };
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+    { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) }
+  );
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const msg = err?.error?.message || `API error ${res.status}`;
+    throw new Error(msg);
+  }
+
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Empty response from Gemini.');
+  return text;
+}
+
+function appendMessage(role, content, isLoading) {
+  const history = document.getElementById('chat-history');
+  const div = document.createElement('div');
+  div.className = 'chat-msg' + (role === 'user' ? ' user' : '');
+  div.innerHTML = `
+    <div class="chat-avatar ${role === 'user' ? 'user-av' : 'ai'}" aria-hidden="true">${role === 'user' ? 'You' : 'AI'}</div>
+    <div class="chat-bubble ${role === 'user' ? 'user' : 'ai'}${isLoading ? ' loading' : ''}" id="${isLoading ? 'loading-bubble' : ''}">${sanitize(content)}</div>
+  `;
+  history.appendChild(div);
+  history.scrollTop = history.scrollHeight;
+  return div;
+}
+
+function sanitize(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('chat-send');
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  if (!geminiKey) {
+    appendMessage('ai', 'Please enter your Gemini API key in the sidebar first, then click Save.');
+    return;
+  }
+
+  input.value = '';
+  sendBtn.disabled = true;
+  appendMessage('user', msg);
+  chatHistory.push({ role:'user', content: msg });
+
+  const loadingEl = appendMessage('ai', 'Thinking…', true);
+
+  try {
+    const reply = await callGemini(msg);
+    loadingEl.querySelector('.chat-bubble').textContent = '';
+    loadingEl.querySelector('.chat-bubble').innerHTML = sanitize(reply);
+    loadingEl.querySelector('.chat-bubble').classList.remove('loading');
+    chatHistory.push({ role:'ai', content: reply });
+  } catch(e) {
+    loadingEl.querySelector('.chat-bubble').innerHTML = '<span style="color:var(--red-400)"><i class="ti ti-alert-circle"></i> ' + sanitize(e.message) + '</span>';
+    loadingEl.querySelector('.chat-bubble').classList.remove('loading');
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+function sendQuick(prompt) {
+  document.getElementById('chat-input').value = prompt;
+  sendChat();
+}
+
+function handleChatKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+}
+
+/* ── Init ── */
+renderCategories();
+renderActions();
+renderInsights();
+initTip();
+initCharts();
+</script>
+</body>
+</html>
