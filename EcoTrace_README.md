@@ -60,9 +60,9 @@ The entire app shell. No build step, no framework, no server. Ships as a single 
 | Daily Actions | 8 checkable eco-actions with live cumulative CO₂ savings counter |
 | Insights | Benchmark comparisons (India avg, global avg, 1.5°C target) + 6-month trend |
 | AI Advisor | Full Gemini chat; 5 quick-prompt buttons; user context auto-injected |
-| **Scanner (NEW)** | **3 camera-powered tools: food label reader, receipt analyser, electricity meter scanner** |
+| **Scanner ** | **3 camera-powered tools: food label reader, receipt analyser, electricity meter scanner** |
 
-**📷 New: Three camera scanners powered by Gemini Vision**
+**📷 Three camera scanners powered by Gemini Vision**
 
 1. **Food label scanner** — Point camera at packaged food → Gemini reads product name, ingredients, serving size → estimates carbon footprint per serving → auto-fills junk food slider
 2. **Receipt scanner** — Scan grocery/restaurant receipt → Gemini extracts all items → gives per-item and total carbon score → shows best swap suggestion
