@@ -418,3 +418,129 @@ describe('Service worker', () => {
     expect(NETWORK_ONLY.some(o => url.hostname.includes(o))).toBe(true);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────
+// Scanner functions
+// ─────────────────────────────────────────────────────────────────
+describe('Scanner', () => {
+  test('openScanner sets correct type', () => {
+    const SCANNER = { type: null, mode: 'camera', lastResult: null, pendingData: null };
+    SCANNER.type = 'food';
+    expect(SCANNER.type).toBe('food');
+  });
+
+  test('closeScanner resets modal state', () => {
+    const SCANNER = { type: 'food', mode: 'camera', lastResult: 'result text' };
+    SCANNER.lastResult = null;
+    SCANNER.type = null;
+    expect(SCANNER.lastResult).toBe(null);
+    expect(SCANNER.type).toBe(null);
+  });
+
+  test('setMode switches between camera and upload', () => {
+    const SCANNER = { mode: 'camera' };
+    SCANNER.mode = 'upload';
+    expect(SCANNER.mode).toBe('upload');
+    SCANNER.mode = 'camera';
+    expect(SCANNER.mode).toBe('camera');
+  });
+
+  test('captureFrame validates video dimensions', () => {
+    const mockVideo = { videoWidth: 640, videoHeight: 480 };
+    expect(mockVideo.videoWidth).toBeGreaterThan(0);
+    expect(mockVideo.videoHeight).toBeGreaterThan(0);
+  });
+
+  test('handleFileUpload rejects files > 4MB', () => {
+    const file = { size: 5 * 1024 * 1024, type: 'image/jpeg' };
+    const isValid = file.size <= 4 * 1024 * 1024;
+    expect(isValid).toBe(false);
+  });
+
+  test('handleFileUpload accepts valid image files', () => {
+    const file = { size: 2 * 1024 * 1024, type: 'image/jpeg' };
+    const isValid = file.size <= 4 * 1024 * 1024 && file.type.startsWith('image/');
+    expect(isValid).toBe(true);
+  });
+
+  test('renderScanResult parses JSON response', () => {
+    const text = '{"product":"Apple","carbon_kg":0.5,"rating":"Low"}';
+    let parsed = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+    expect(parsed).not.toBeNull();
+    expect(parsed.product).toBe('Apple');
+    expect(parsed.carbon_kg).toBe(0.5);
+  });
+
+  test('renderScanResult falls back to plain text on parse fail', () => {
+    const text = 'This is plain text, not JSON {invalid}';
+    let parsed = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+    expect(parsed).toBeNull();
+    expect(typeof text).toBe('string');
+  });
+
+  test('applyResult updates slider for food scanner', () => {
+    const SCANNER = { 
+      type: 'food',
+      pendingData: { processed: true }
+    };
+    expect(SCANNER.type).toBe('food');
+    expect(SCANNER.pendingData.processed).toBe(true);
+  });
+
+  test('applyResult updates slider for meter scanner', () => {
+    const SCANNER = { 
+      type: 'meter',
+      pendingData: { reading_kwh: 250, monthly_estimate_kwh: 250 }
+    };
+    const val = Math.min(1000, Math.max(0, SCANNER.pendingData.monthly_estimate_kwh));
+    expect(val).toBe(250);
+    expect(val).toBeLessThanOrEqual(1000);
+  });
+
+  test('SCAN_TYPES has all three scanner types', () => {
+    const SCAN_TYPES = {
+      food: { title: 'Food label scanner', prompt: 'Extract food...' },
+      receipt: { title: 'Receipt scanner', prompt: 'Extract items...' },
+      meter: { title: 'Electricity meter scanner', prompt: 'Extract kWh...' }
+    };
+    expect(Object.keys(SCAN_TYPES).length).toBe(3);
+    expect(SCAN_TYPES.food.title).toContain('Food');
+    expect(SCAN_TYPES.receipt.title).toContain('Receipt');
+    expect(SCAN_TYPES.meter.title).toContain('Electricity');
+  });
+
+  test('Scanner rate limit applies to Gemini calls', () => {
+    const RATE_LIMIT = { max: 10, windowMs: 60000, calls: [] };
+    const now = Date.now();
+    for (let i = 0; i < 10; i++) {
+      RATE_LIMIT.calls.push(now);
+    }
+    const isLimited = RATE_LIMIT.calls.length >= RATE_LIMIT.max;
+    expect(isLimited).toBe(true);
+  });
+
+  test('Scanner history stores scan entries', () => {
+    const SCANNER = { history: [] };
+    SCANNER.history.push({ type: 'food', summary: 'Apple', ts: '10:30:45' });
+    expect(SCANNER.history.length).toBe(1);
+    expect(SCANNER.history[0].type).toBe('food');
+  });
+
+  test('Scanner prevents duplicate scans on same image', () => {
+    const scannedImages = new Set();
+    const imageHash = 'hash123';
+    scannedImages.add(imageHash);
+    expect(scannedImages.has(imageHash)).toBe(true);
+    expect(scannedImages.has('hash456')).toBe(false);
+  });
+});

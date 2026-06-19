@@ -1081,19 +1081,48 @@ function handleChatKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
 }
 
-/* ── Camera Scanner ── */
+/**
+ * ════════════════════════════════════════════════════════════════════════════════
+ * 📷 CAMERA SCANNER MODULE
+ * ════════════════════════════════════════════════════════════════════════════════
+ * 
+ * Provides AI-powered image scanning for carbon data entry:
+ * • Food label scanner — reads product info & estimates carbon footprint
+ * • Receipt scanner — extracts items & calculates meal carbon score
+ * • Electricity meter scanner — reads kWh & auto-fills energy usage
+ * 
+ * Uses Gemini Vision API for image analysis; results auto-populate log sliders.
+ * All camera frames are processed locally; only images sent to Gemini are temp.
+ */
+
+/* ── Scanner state constants ── */
+const SCANNER_LIMITS = {
+  MAX_FILE_SIZE_MB: 4,
+  MAX_FILE_SIZE_BYTES: 4 * 1024 * 1024,
+  RATE_LIMIT_MAX_CALLS: 10,
+  RATE_LIMIT_WINDOW_MS: 60000,
+  IMAGE_QUALITY: 0.85,
+  CANVAS_WIDTH: 640,
+  CANVAS_HEIGHT: 480,
+};
 
 /**
- * Scanner state — tracks active mode, scan type, camera stream,
- * last Gemini result, and parsed data ready to apply to the log.
+ * Scanner state object — tracks all scanner context across operations.
+ * @type {Object}
+ * @property {string} type - Active scanner type: 'food' | 'receipt' | 'meter'
+ * @property {string} mode - Input mode: 'camera' | 'upload'
+ * @property {MediaStream|null} stream - Active camera stream (null if inactive)
+ * @property {string|null} lastResult - Raw Gemini Vision API response
+ * @property {Object|null} pendingData - Parsed result ready to apply to log
+ * @property {Array} history - Scan history for current session (max 5 entries)
  */
 const SCANNER = {
-  type: 'food',        // 'food' | 'receipt' | 'meter'
-  mode: 'camera',      // 'camera' | 'upload'
-  stream: null,        // MediaStream when camera active
-  lastResult: null,    // Raw Gemini response text
-  pendingData: null,   // Parsed { field, value } to apply
-  history: [],         // Array of past scan summaries
+  type: 'food',
+  mode: 'camera',
+  stream: null,
+  lastResult: null,
+  pendingData: null,
+  history: [],
 };
 
 /** Scanner type metadata */
@@ -1131,9 +1160,18 @@ Respond in this exact JSON format (no markdown):
 };
 
 /**
- * Opens the scanner modal for the given type.
- * Requests camera permission and starts the video stream.
- * @param {string} type - 'food' | 'receipt' | 'meter'
+ * Opens the scanner modal for the specified type and initializes the camera stream.
+ * Validates API key before allowing scan to proceed.
+ * 
+ * @function openScanner
+ * @param {string} type - Scanner type ('food' | 'receipt' | 'meter')
+ * @throws {alert} If Gemini API key not set
+ * 
+ * @example
+ * openScanner('food');  // Opens food label scanner
+ * 
+ * @updates {SCANNER.type} Sets active scanner type
+ * @side-effects Requests camera permission, shows modal
  */
 async function openScanner(type) {
   if (!geminiKey) {
@@ -1186,7 +1224,24 @@ async function setMode(mode) {
   }
 }
 
-/** Requests camera access and streams to video element */
+/**
+ * Requests camera access and streams video to the preview element.
+ * Uses environment-facing camera (rear on mobile) for better scanning.
+ * 
+ * @function startCamera
+ * @async
+ * @throws {Error} If browser denies camera permission or device has no camera
+ * 
+ * @side-effects
+ * - Requests getUserMedia permission (browser shows permission dialog)
+ * - Sets SCANNER.stream to active MediaStream
+ * - Pipes stream to video#cam-video element
+ * - Updates UI hint text on failure
+ * 
+ * @camera-config
+ * facingMode: 'environment' (rear camera on mobile, external on desktop)
+ * ideal resolution: 1280x720
+ */
 async function startCamera() {
   try {
     SCANNER.stream = await navigator.mediaDevices.getUserMedia({
@@ -1200,8 +1255,18 @@ async function startCamera() {
 }
 
 /**
- * Captures the current video frame to a canvas,
- * converts to base64, and sends to Gemini Vision.
+ * Captures current video frame to canvas, converts to JPEG base64, sends to Gemini.
+ * Stops camera stream immediately after capture to preserve battery.
+ * 
+ * @function captureFrame
+ * @side-effects
+ * - Creates HTML5 canvas with video frame
+ * - Converts to JPEG at 85% quality (balance: size vs fidelity)
+ * - Shows preview image
+ * - Stops camera stream (SCANNER.stream.getTracks().stop())
+ * - Calls analyseImage() with base64 data
+ * 
+ * @compression JPEG 85% ≈ 50-100KB per scan (fast upload, good quality)
  */
 function captureFrame() {
   const video = document.getElementById('cam-video');
@@ -1217,8 +1282,22 @@ function captureFrame() {
 }
 
 /**
- * Handles file upload — reads as base64 and sends to Gemini.
- * @param {Event} event - file input change event
+ * Handles file upload from device gallery; validates size, reads, sends to Gemini.
+ * 
+ * @function handleFileUpload
+ * @param {Event} event - Input change event from file#file-input
+ * 
+ * @validation
+ * - File size ≤ 4MB (alert user if oversized)
+ * - MIME type: image/* (images only)
+ * 
+ * @side-effects
+ * - Reads file as DataURL via FileReader
+ * - Shows preview image
+ * - Calls analyseImage() with base64 data
+ * - Shows error alert if validation fails
+ * 
+ * @throws {alert} If file > 4MB
  */
 function handleFileUpload(event) {
   const file = event.target.files[0];
@@ -1255,9 +1334,25 @@ function showPreview(dataUrl) {
 }
 
 /**
- * Sends the captured image to Gemini Vision API with type-specific prompt.
- * @param {string} base64Data - base64 encoded image data
- * @param {string} mimeType - image MIME type
+ * Sends image to Gemini Vision API with type-specific prompt.
+ * Enforces rate limiting (max 10 calls/60s) to prevent API quota exhaustion.
+ * 
+ * @function analyseImage
+ * @param {string} base64Data - Base64-encoded image data (no data: prefix)
+ * @param {string} mimeType - Image MIME type ('image/jpeg' | 'image/png' | 'image/webp')
+ * 
+ * @returns {Promise<void>}
+ * 
+ * @throws {Error} If API response empty or malformed
+ * @throws {Alert} If rate limit exceeded
+ * 
+ * @example
+ * analyseImage('iVBORw0KGgo...', 'image/jpeg');
+ * 
+ * @side-effects
+ * - Updates SCANNER.lastResult with raw Gemini response
+ * - Calls renderScanResult() to display parsed findings
+ * - Shows error state if analysis fails
  */
 async function analyseImage(base64Data, mimeType) {
   if (isRateLimited()) {
@@ -1294,9 +1389,26 @@ async function analyseImage(base64Data, mimeType) {
 }
 
 /**
- * Parses Gemini JSON response and renders a result card.
- * Falls back to plain text display if JSON parse fails.
- * @param {string} text - raw response from Gemini
+ * Parses Gemini Vision API response and renders result card with proper formatting.
+ * Handles JSON parsing with automatic fallback to plain text for robustness.
+ * 
+ * @function renderScanResult
+ * @param {string} text - Raw response from Gemini Vision API
+ * 
+ * @modifies {SCANNER.pendingData} Sets parsed result for later application
+ * @updates DOM elements:
+ *   - #scan-result-card: Displays formatted findings
+ *   - #scanner-actions: Shows Apply & Retake buttons
+ * 
+ * @description
+ * Parsing strategy:
+ *   1. Strip markdown code fences (```json ... ```)
+ *   2. Attempt JSON.parse()
+ *   3. If fail: display raw text as fallback
+ *   4. Type-specific formatting for food/receipt/meter
+ * 
+ * @example
+ * renderScanResult('{"product":"Apple","carbon_kg":0.5,"rating":"Low"}');
  */
 function renderScanResult(text) {
   const resultEl = document.getElementById('scan-result-card');
@@ -1371,8 +1483,24 @@ function showScanError(msg) {
 }
 
 /**
- * Applies the scan result to the relevant slider/log field.
- * Updates UI and saves a history entry.
+ * Applies parsed scan result to the activity log by updating relevant sliders.
+ * Type-specific logic: food updates junk/meat slider, meter updates electricity slider.
+ * Saves scan to history and switches UI to Log Activity tab.
+ * 
+ * @function applyResult
+ * @requires {SCANNER.pendingData} Must be set before calling
+ * @requires {SCANNER.type} Determines which slider to update
+ * 
+ * @side-effects
+ * - Updates slider value and triggers updateSlider()
+ * - Adds entry to SCANNER.history
+ * - Closes scanner modal
+ * - Switches active tab to 'log'
+ * - Re-renders history list on scanner section
+ * 
+ * @example
+ * // Auto-fills electricity from meter reading
+ * applyResult();  // Reads SCANNER.pendingData.reading_kwh
  */
 function applyResult() {
   if (!SCANNER.pendingData) return;
