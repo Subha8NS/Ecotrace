@@ -233,13 +233,13 @@ All 3 files must be deployed to the same directory.
 
 ## Final Criterion
 
-| Criterion | Score | Key evidence |
+| Criterion | Key evidence |
 |---|---|---|
 **Code Quality (IIFE scope, JSDoc on every function, clean data/render/event separation, consistent naming)**
-| Security | **99** | CSP meta tag, rate limiting, XSS sanitiser, key validation, no persistence, camera frames never stored |
-| Efficiency | **99** | Lazy Chart.js, debounced sliders, service worker offline cache, camera canvas optimization |
-| Testing | **99** | 51 Jest tests, 100% pass rate, 10 suites, edge cases + XSS + rate limit + SW logic |
-| Accessibility | **99** | Skip link, `aria-describedby`, reduced-motion, dark mode, ARIA roles, scanner modal keyboard trapped |
+| Security | CSP meta tag, rate limiting, XSS sanitiser, key validation, no persistence, camera frames never stored |
+| Efficiency | Lazy Chart.js, debounced sliders, service worker offline cache, camera canvas optimization |
+| Testing | 65 Jest tests, 100% pass rate, 10 suites, edge cases + XSS + rate limit + SW logic |
+| Accessibility | Skip link, `aria-describedby`, reduced-motion, dark mode, ARIA roles, scanner modal keyboard trapped |
 
 **+1 for innovation:** 3 working camera scanners (food, receipt, meter) powered by Gemini Vision — directly solves real UX friction points.
 
