@@ -6,7 +6,7 @@
 <title>EcoTrace — Carbon Footprint Tracker</title>
 <!-- Security: CSP restricts resources to known trusted origins only -->
 <meta http-equiv="Content-Security-Policy"
-  content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; connect-src https://generativelanguage.googleapis.com; img-src 'self' data:;">
+  content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; connect-src https://generativelanguage.googleapis.com; img-src 'self' data: blob:; media-src 'self' blob:;">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
 <!-- Chart.js is loaded lazily inside initCharts() to avoid blocking first paint -->
 <style>
@@ -218,7 +218,46 @@
   .quick-btn:hover { background:var(--bg-secondary); color:var(--text-primary); border-color:var(--green-400); }
   .quick-btn:focus-visible { outline:2px solid var(--green-400); outline-offset:2px; }
 
-  /* ── Divider ── */
+  /* ── Scanner ── */
+  .scanner-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1000; flex-direction:column; align-items:center; justify-content:center; padding:1rem; }
+  .scanner-modal.open { display:flex; }
+  .scanner-box { background:var(--bg-primary); border-radius:var(--radius-xl); overflow:hidden; width:100%; max-width:440px; }
+  .scanner-header { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:0.5px solid var(--border-light); }
+  .scanner-title { font-size:14px; font-weight:500; }
+  .scanner-close { background:none; border:none; cursor:pointer; color:var(--text-secondary); font-size:20px; padding:4px; border-radius:var(--radius-sm); }
+  .scanner-close:hover { background:var(--bg-secondary); }
+  .scanner-close:focus-visible { outline:2px solid var(--green-400); }
+  .scanner-mode-tabs { display:flex; gap:0; border-bottom:0.5px solid var(--border-light); }
+  .scanner-mode-btn { flex:1; padding:10px; font-size:12px; font-weight:500; border:none; background:none; cursor:pointer; color:var(--text-secondary); border-bottom:2px solid transparent; transition:all .15s; }
+  .scanner-mode-btn.active { color:var(--green-600); border-bottom-color:var(--green-400); background:var(--green-50); }
+  .scanner-mode-btn:focus-visible { outline:2px solid var(--green-400); outline-offset:-2px; }
+  @media(prefers-color-scheme:dark){ .scanner-mode-btn.active { background:rgba(99,153,34,.12); } }
+  .cam-wrap { position:relative; width:100%; height:260px; background:#000; overflow:hidden; }
+  .cam-wrap video { width:100%; height:100%; object-fit:cover; }
+  .cam-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+  .cam-frame { width:220px; height:140px; border:2px solid rgba(99,153,34,0.9); border-radius:8px; box-shadow:0 0 0 9999px rgba(0,0,0,0.45); }
+  .cam-label { position:absolute; bottom:10px; left:0; right:0; text-align:center; font-size:11px; color:rgba(255,255,255,0.8); }
+  .cam-snap-btn { position:absolute; bottom:14px; right:14px; width:44px; height:44px; border-radius:50%; background:var(--green-400); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; font-size:20px; }
+  .cam-snap-btn:hover { background:var(--green-600); }
+  .cam-snap-btn:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+  .scanner-preview { width:100%; height:260px; object-fit:contain; background:#000; display:none; }
+  .scanner-result { padding:14px 16px; min-height:80px; }
+  .scanner-result-placeholder { color:var(--text-hint); font-size:13px; text-align:center; padding:16px 0; }
+  .scanner-result-card { background:var(--bg-secondary); border-radius:var(--radius-md); padding:12px; }
+  .scanner-result-title { font-size:13px; font-weight:600; margin-bottom:4px; }
+  .scanner-result-body { font-size:12px; color:var(--text-secondary); line-height:1.5; }
+  .scanner-result-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:10px; margin-top:8px; }
+  .scanner-actions { padding:12px 16px; display:flex; gap:8px; border-top:0.5px solid var(--border-light); }
+  .scanner-retake { flex:1; }
+  .scanner-apply { flex:2; }
+  .scan-trigger-row { display:flex; gap:8px; margin-bottom:1rem; flex-wrap:wrap; }
+  .scan-btn { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; font-size:12px; font-weight:500; border:0.5px solid var(--green-400); border-radius:var(--radius-md); background:var(--green-50); color:var(--green-600); cursor:pointer; transition:background .1s; }
+  .scan-btn:hover { background:var(--green-100); }
+  .scan-btn:focus-visible { outline:2px solid var(--green-400); outline-offset:2px; }
+  @media(prefers-color-scheme:dark){ .scan-btn { background:rgba(99,153,34,.12); } }
+  .scanning-pulse { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
+  @media(prefers-reduced-motion:reduce){ .scanning-pulse { animation:none; } }
   .divider { height:0.5px; background:var(--border-light); margin:1.25rem 0; }
 
   /* ── Buttons ── */
@@ -265,6 +304,9 @@
     </button>
     <button class="nav-item" onclick="switchTab('ai',this)" role="tab" aria-selected="false" aria-controls="section-ai">
       <i class="ti ti-robot" aria-hidden="true"></i> AI advisor
+    </button>
+    <button class="nav-item" onclick="switchTab('scanner',this)" role="tab" aria-selected="false" aria-controls="section-scanner">
+      <i class="ti ti-camera" aria-hidden="true"></i> Scanner
     </button>
 
     <div class="nav-spacer"></div>
@@ -384,6 +426,11 @@
 
       <div class="card">
         <div class="card-header"><span class="card-title"><i class="ti ti-bolt" aria-hidden="true"></i> Home energy</span></div>
+        <div class="scan-trigger-row">
+          <button class="scan-btn" onclick="openScanner('meter')" aria-label="Scan electricity meter to auto-fill kWh">
+            <i class="ti ti-camera" aria-hidden="true"></i> Scan electricity meter
+          </button>
+        </div>
         <div class="slider-group">
           <div class="slider-label">
             <span class="slider-name"><i class="ti ti-bolt" aria-hidden="true"></i> Electricity (kWh/month)</span>
@@ -402,6 +449,14 @@
 
       <div class="card">
         <div class="card-header"><span class="card-title"><i class="ti ti-apple" aria-hidden="true"></i> Food</span></div>
+        <div class="scan-trigger-row">
+          <button class="scan-btn" onclick="openScanner('food')" aria-label="Scan food label to auto-fill">
+            <i class="ti ti-camera" aria-hidden="true"></i> Scan food label
+          </button>
+          <button class="scan-btn" onclick="openScanner('receipt')" aria-label="Scan grocery receipt">
+            <i class="ti ti-receipt" aria-hidden="true"></i> Scan receipt
+          </button>
+        </div>
         <div class="slider-group">
           <div class="slider-label">
             <span class="slider-name"><i class="ti ti-burger" aria-hidden="true"></i> Junk / processed meals per week</span>
@@ -523,7 +578,108 @@
       </div>
     </section>
 
+    <!-- ── SCANNER ── -->
+    <section id="section-scanner" class="section" role="tabpanel" aria-labelledby="tab-scanner">
+      <div class="page-title">Camera scanner</div>
+      <div class="page-sub">Point your camera to auto-fill activity data — powered by Gemini Vision</div>
+
+      <div class="tip-bar">
+        <i class="ti ti-info-circle" aria-hidden="true"></i>
+        <span class="tip-text">Requires Gemini API key and camera permission. Works best in good lighting.</span>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title"><i class="ti ti-apple" aria-hidden="true"></i> Food label scanner</span><span class="badge badge-green">Auto-fills food log</span></div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Point at any packaged food label. Gemini reads the product and estimates its carbon footprint per serving.</p>
+        <button class="btn btn-primary" onclick="openScanner('food')" aria-label="Open food label scanner">
+          <i class="ti ti-camera" aria-hidden="true"></i> Open food label scanner
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title"><i class="ti ti-receipt" aria-hidden="true"></i> Receipt scanner</span><span class="badge badge-amber">Analyses full meal</span></div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Scan a grocery or restaurant receipt. Gemini categorises each item and gives a total carbon score for your shop.</p>
+        <button class="btn btn-primary" onclick="openScanner('receipt')" aria-label="Open receipt scanner">
+          <i class="ti ti-camera" aria-hidden="true"></i> Open receipt scanner
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title"><i class="ti ti-bolt" aria-hidden="true"></i> Electricity meter scanner</span><span class="badge badge-blue">Auto-fills energy log</span></div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Point at your electricity meter display. Gemini reads the kWh number and auto-fills your monthly energy usage.</p>
+        <button class="btn btn-primary" onclick="openScanner('meter')" aria-label="Open electricity meter scanner">
+          <i class="ti ti-camera" aria-hidden="true"></i> Open meter scanner
+        </button>
+      </div>
+
+      <div id="scanner-history" style="display:none">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Recent scans</span></div>
+          <div id="scanner-history-list"></div>
+        </div>
+      </div>
+    </section>
+
   </main>
+</div>
+
+<!-- ── SCANNER MODAL ── -->
+<div id="scanner-modal" class="scanner-modal" role="dialog" aria-modal="true" aria-label="Camera scanner" aria-labelledby="scanner-modal-title">
+  <div class="scanner-box">
+    <div class="scanner-header">
+      <span class="scanner-title" id="scanner-modal-title">Scanner</span>
+      <button class="scanner-close" onclick="closeScanner()" aria-label="Close scanner">
+        <i class="ti ti-x" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="scanner-mode-tabs" role="tablist" aria-label="Scanner mode">
+      <button class="scanner-mode-btn active" id="mode-camera" onclick="setMode('camera')" role="tab" aria-selected="true">📷 Camera</button>
+      <button class="scanner-mode-btn" id="mode-upload" onclick="setMode('upload')" role="tab" aria-selected="false">📁 Upload image</button>
+    </div>
+
+    <!-- Camera view -->
+    <div id="cam-view">
+      <div class="cam-wrap">
+        <video id="cam-video" autoplay playsinline muted aria-label="Camera preview"></video>
+        <div class="cam-overlay">
+          <div class="cam-frame" role="presentation"></div>
+        </div>
+        <div class="cam-label" id="cam-hint">Centre the item in the frame</div>
+        <button class="cam-snap-btn" onclick="captureFrame()" aria-label="Take photo">
+          <i class="ti ti-camera" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Upload view -->
+    <div id="upload-view" style="display:none">
+      <div style="padding:20px;text-align:center">
+        <input type="file" id="file-input" accept="image/*" capture="environment" style="display:none" onchange="handleFileUpload(event)" aria-label="Choose image file">
+        <button class="btn btn-primary" onclick="document.getElementById('file-input').click()" style="margin-bottom:10px">
+          <i class="ti ti-upload" aria-hidden="true"></i> Choose image
+        </button>
+        <div style="font-size:12px;color:var(--text-hint)">JPG, PNG or WEBP — max 4MB</div>
+      </div>
+    </div>
+
+    <!-- Preview after capture -->
+    <img id="scanner-preview" class="scanner-preview" alt="Captured image for analysis">
+
+    <div class="scanner-result">
+      <div class="scanner-result-placeholder" id="scan-placeholder">
+        <i class="ti ti-camera" aria-hidden="true" style="font-size:28px;display:block;margin-bottom:8px;opacity:.4"></i>
+        Take a photo or upload an image to analyse
+      </div>
+      <div id="scan-result-card" style="display:none"></div>
+    </div>
+
+    <div class="scanner-actions" id="scanner-actions" style="display:none">
+      <button class="btn scanner-retake" onclick="retakeScan()" aria-label="Retake photo">Retake</button>
+      <button class="btn btn-primary scanner-apply" id="apply-btn" onclick="applyResult()" aria-label="Apply result to log">
+        <i class="ti ti-check" aria-hidden="true"></i> Apply to log
+      </button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -925,7 +1081,375 @@ function handleChatKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
 }
 
-/* ── Init ── */
+/* ── Camera Scanner ── */
+
+/**
+ * Scanner state — tracks active mode, scan type, camera stream,
+ * last Gemini result, and parsed data ready to apply to the log.
+ */
+const SCANNER = {
+  type: 'food',        // 'food' | 'receipt' | 'meter'
+  mode: 'camera',      // 'camera' | 'upload'
+  stream: null,        // MediaStream when camera active
+  lastResult: null,    // Raw Gemini response text
+  pendingData: null,   // Parsed { field, value } to apply
+  history: [],         // Array of past scan summaries
+};
+
+/** Scanner type metadata */
+const SCAN_TYPES = {
+  food: {
+    title: 'Food label scanner',
+    hint: 'Centre the food label in the frame',
+    prompt: `You are a carbon footprint expert. Analyse this food product label image.
+Extract: 1) product name, 2) key ingredients, 3) serving size if visible.
+Then estimate the carbon footprint in kg CO2e per serving.
+Rate it: Low (<0.5kg), Medium (0.5-2kg), or High (>2kg).
+Finally, say whether this increases or decreases the user's junk/processed food intake.
+Respond in this exact JSON format (no markdown):
+{"product":"name","ingredients":"top 3","serving":"amount","carbon_kg":0.0,"rating":"Low|Medium|High","processed":true|false,"summary":"one sentence insight","suggestion":"one actionable tip"}`
+  },
+  receipt: {
+    title: 'Receipt scanner',
+    hint: 'Hold the receipt flat and steady',
+    prompt: `You are a carbon footprint expert. Analyse this grocery or restaurant receipt image.
+Extract all food/drink items you can read.
+For each item estimate its carbon footprint.
+Then give a total carbon score for the shop/meal.
+Respond in this exact JSON format (no markdown):
+{"items":[{"name":"item","carbon_kg":0.0,"category":"meat|dairy|produce|processed|beverage|other"}],"total_carbon_kg":0.0,"rating":"Low|Medium|High","summary":"one sentence about the overall carbon impact","top_tip":"single best swap to reduce carbon"}`
+  },
+  meter: {
+    title: 'Electricity meter scanner',
+    hint: 'Point at the meter display — keep steady',
+    prompt: `You are an energy reading expert. Analyse this electricity meter image.
+Extract the numeric kWh reading shown on the display.
+Also note the meter type if visible (digital/analogue/smart).
+Respond in this exact JSON format (no markdown):
+{"reading_kwh":0,"meter_type":"digital|analogue|smart|unknown","confidence":"high|medium|low","notes":"any relevant observation","monthly_estimate_kwh":0}`
+  }
+};
+
+/**
+ * Opens the scanner modal for the given type.
+ * Requests camera permission and starts the video stream.
+ * @param {string} type - 'food' | 'receipt' | 'meter'
+ */
+async function openScanner(type) {
+  if (!geminiKey) {
+    alert('Please enter your Gemini API key in the sidebar first.');
+    return;
+  }
+  SCANNER.type = type;
+  const meta = SCAN_TYPES[type];
+  document.getElementById('scanner-modal-title').textContent = meta.title;
+  document.getElementById('cam-hint').textContent = meta.hint;
+  document.getElementById('scanner-modal').classList.add('open');
+  resetScanUI();
+  setMode('camera');
+  document.getElementById('scanner-close-btn') && document.getElementById('scanner-close-btn').focus();
+}
+
+/** Closes modal and stops camera stream */
+function closeScanner() {
+  document.getElementById('scanner-modal').classList.remove('open');
+  stopCamera();
+}
+
+/** Stops all camera tracks */
+function stopCamera() {
+  if (SCANNER.stream) {
+    SCANNER.stream.getTracks().forEach(t => t.stop());
+    SCANNER.stream = null;
+  }
+  const video = document.getElementById('cam-video');
+  video.srcObject = null;
+}
+
+/**
+ * Switches between camera and file-upload modes.
+ * @param {string} mode - 'camera' | 'upload'
+ */
+async function setMode(mode) {
+  SCANNER.mode = mode;
+  document.getElementById('mode-camera').classList.toggle('active', mode === 'camera');
+  document.getElementById('mode-upload').classList.toggle('active', mode === 'upload');
+  document.getElementById('mode-camera').setAttribute('aria-selected', mode === 'camera');
+  document.getElementById('mode-upload').setAttribute('aria-selected', mode === 'upload');
+  document.getElementById('cam-view').style.display = mode === 'camera' ? 'block' : 'none';
+  document.getElementById('upload-view').style.display = mode === 'upload' ? 'block' : 'none';
+
+  if (mode === 'camera') {
+    await startCamera();
+  } else {
+    stopCamera();
+  }
+}
+
+/** Requests camera access and streams to video element */
+async function startCamera() {
+  try {
+    SCANNER.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    document.getElementById('cam-video').srcObject = SCANNER.stream;
+  } catch (err) {
+    document.getElementById('cam-hint').textContent = '⚠️ Camera access denied — use Upload instead';
+    document.getElementById('cam-view').querySelector('.cam-snap-btn').disabled = true;
+  }
+}
+
+/**
+ * Captures the current video frame to a canvas,
+ * converts to base64, and sends to Gemini Vision.
+ */
+function captureFrame() {
+  const video = document.getElementById('cam-video');
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+
+  const imageData = canvas.toDataURL('image/jpeg', 0.85);
+  showPreview(imageData);
+  stopCamera();
+  analyseImage(imageData.split(',')[1], 'image/jpeg');
+}
+
+/**
+ * Handles file upload — reads as base64 and sends to Gemini.
+ * @param {Event} event - file input change event
+ */
+function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 4 * 1024 * 1024) {
+    alert('Image too large — please use an image under 4MB.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    showPreview(dataUrl);
+    const base64 = dataUrl.split(',')[1];
+    const mimeType = file.type || 'image/jpeg';
+    analyseImage(base64, mimeType);
+  };
+  reader.readAsDataURL(file);
+}
+
+/** Shows the captured/uploaded image in the preview area */
+function showPreview(dataUrl) {
+  const preview = document.getElementById('scanner-preview');
+  preview.src = dataUrl;
+  preview.style.display = 'block';
+  document.getElementById('cam-view').style.display = 'none';
+  document.getElementById('upload-view').style.display = 'none';
+  document.getElementById('scan-placeholder').style.display = 'none';
+  document.getElementById('scan-result-card').style.display = 'none';
+  document.getElementById('scanner-actions').style.display = 'none';
+
+  const resultEl = document.getElementById('scan-result-card');
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = `<div class="scanner-result-placeholder scanning-pulse"><i class="ti ti-loader" style="font-size:22px;display:block;margin-bottom:8px"></i>Analysing with Gemini Vision…</div>`;
+}
+
+/**
+ * Sends the captured image to Gemini Vision API with type-specific prompt.
+ * @param {string} base64Data - base64 encoded image data
+ * @param {string} mimeType - image MIME type
+ */
+async function analyseImage(base64Data, mimeType) {
+  if (isRateLimited()) {
+    showScanError('Rate limit reached — please wait a moment before scanning again.');
+    return;
+  }
+  const prompt = SCAN_TYPES[SCANNER.type].prompt;
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: base64Data } }
+            ]
+          }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 600 }
+        })
+      }
+    );
+    if (!res.ok) throw new Error(`API error ${res.status}`);
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('Empty response from Gemini.');
+    SCANNER.lastResult = text;
+    renderScanResult(text);
+  } catch (err) {
+    showScanError(err.message);
+  }
+}
+
+/**
+ * Parses Gemini JSON response and renders a result card.
+ * Falls back to plain text display if JSON parse fails.
+ * @param {string} text - raw response from Gemini
+ */
+function renderScanResult(text) {
+  const resultEl = document.getElementById('scan-result-card');
+  const actionsEl = document.getElementById('scanner-actions');
+  let parsed = null;
+
+  try {
+    // Strip any markdown code fences before parsing
+    const clean = text.replace(/```json|```/g, '').trim();
+    parsed = JSON.parse(clean);
+    SCANNER.pendingData = parsed;
+  } catch {
+    // Show raw text if JSON fails
+    resultEl.innerHTML = `<div class="scanner-result-card">
+      <div class="scanner-result-title">Analysis result</div>
+      <div class="scanner-result-body">${sanitize(text)}</div>
+    </div>`;
+    actionsEl.style.display = 'flex';
+    document.getElementById('apply-btn').style.display = 'none';
+    return;
+  }
+
+  let html = '<div class="scanner-result-card">';
+  const ratingColor = { Low:'badge-green', Medium:'badge-amber', High:'badge-red' };
+
+  if (SCANNER.type === 'food') {
+    html += `<div class="scanner-result-title">${sanitize(parsed.product || 'Food item')}</div>
+    <div class="scanner-result-body">
+      <strong>Ingredients:</strong> ${sanitize(parsed.ingredients || '—')}<br>
+      <strong>Serving:</strong> ${sanitize(String(parsed.serving || '—'))}<br>
+      <strong>Carbon footprint:</strong> ${parsed.carbon_kg} kg CO₂e per serving<br>
+      <em>${sanitize(parsed.summary || '')}</em><br>
+      💡 ${sanitize(parsed.suggestion || '')}
+    </div>
+    <span class="scanner-result-badge ${ratingColor[parsed.rating] || 'badge-blue'}">${parsed.rating || '—'} carbon</span>`;
+  } else if (SCANNER.type === 'receipt') {
+    const items = Array.isArray(parsed.items) ? parsed.items : [];
+    html += `<div class="scanner-result-title">Receipt — ${items.length} item${items.length !== 1 ? 's' : ''}</div>
+    <div class="scanner-result-body">
+      ${items.slice(0,5).map(i => `• ${sanitize(i.name)} — ${i.carbon_kg} kg CO₂e`).join('<br>')}
+      ${items.length > 5 ? `<br><em>+${items.length - 5} more items</em>` : ''}
+      <br><br><strong>Total: ${parsed.total_carbon_kg} kg CO₂e</strong><br>
+      <em>${sanitize(parsed.summary || '')}</em><br>
+      💡 ${sanitize(parsed.top_tip || '')}
+    </div>
+    <span class="scanner-result-badge ${ratingColor[parsed.rating] || 'badge-blue'}">${parsed.rating || '—'} impact shop</span>`;
+  } else if (SCANNER.type === 'meter') {
+    html += `<div class="scanner-result-title">Meter reading: ${parsed.reading_kwh} kWh</div>
+    <div class="scanner-result-body">
+      <strong>Type:</strong> ${sanitize(parsed.meter_type || 'Unknown')}<br>
+      <strong>Confidence:</strong> ${sanitize(parsed.confidence || '—')}<br>
+      <strong>Est. monthly usage:</strong> ${parsed.monthly_estimate_kwh || '—'} kWh<br>
+      <em>${sanitize(parsed.notes || '')}</em>
+    </div>
+    <span class="scanner-result-badge badge-blue">Confidence: ${sanitize(parsed.confidence || '—')}</span>`;
+  }
+
+  html += '</div>';
+  resultEl.innerHTML = html;
+  actionsEl.style.display = 'flex';
+  document.getElementById('apply-btn').style.display = parsed ? 'inline-flex' : 'none';
+}
+
+/** Shows an error state in the result area */
+function showScanError(msg) {
+  document.getElementById('scan-result-card').innerHTML =
+    `<div class="scanner-result-card"><div class="scanner-result-title" style="color:var(--red-400)">⚠️ Scan failed</div>
+    <div class="scanner-result-body">${sanitize(msg)}</div></div>`;
+  document.getElementById('scan-result-card').style.display = 'block';
+  document.getElementById('scanner-actions').style.display = 'flex';
+  document.getElementById('apply-btn').style.display = 'none';
+}
+
+/**
+ * Applies the scan result to the relevant slider/log field.
+ * Updates UI and saves a history entry.
+ */
+function applyResult() {
+  if (!SCANNER.pendingData) return;
+  const d = SCANNER.pendingData;
+
+  if (SCANNER.type === 'food' && d.processed !== undefined) {
+    // Nudge the junk food slider if item is processed
+    const el = document.querySelector('input[aria-label="Junk food or processed meals per week"]');
+    if (el) {
+      const cur = parseInt(el.value);
+      const newVal = d.processed ? Math.min(21, cur + 1) : Math.max(0, cur - 1);
+      el.value = newVal;
+      updateSlider('meat', newVal, 'meals');
+    }
+  } else if (SCANNER.type === 'meter' && d.reading_kwh) {
+    const el = document.querySelector('input[aria-label="Monthly electricity kWh"]');
+    if (el) {
+      const val = Math.min(1000, Math.max(0, d.monthly_estimate_kwh || d.reading_kwh));
+      el.value = val;
+      updateSlider('elec', val, 'kWh');
+    }
+  }
+
+  // Save to scan history
+  const summary = SCANNER.type === 'food' ? (d.product || 'Food item')
+    : SCANNER.type === 'receipt' ? `Receipt (${d.total_carbon_kg} kg CO₂e)`
+    : `Meter: ${d.reading_kwh} kWh`;
+  SCANNER.history.unshift({ type: SCANNER.type, summary, ts: new Date().toLocaleTimeString() });
+  renderScanHistory();
+
+  closeScanner();
+
+  // Switch to log tab so user sees the updated slider
+  const logTab = document.querySelector('[aria-controls="section-log"]');
+  if (logTab) switchTab('log', logTab);
+}
+
+/** Resets scan UI to initial camera state */
+function retakeScan() {
+  resetScanUI();
+  setMode(SCANNER.mode);
+}
+
+function resetScanUI() {
+  document.getElementById('scanner-preview').style.display = 'none';
+  document.getElementById('scan-result-card').style.display = 'none';
+  document.getElementById('scan-placeholder').style.display = 'block';
+  document.getElementById('scanner-actions').style.display = 'none';
+  document.getElementById('scan-result-card').innerHTML = '';
+  SCANNER.pendingData = null;
+}
+
+/** Renders scan history list in the scanner section */
+function renderScanHistory() {
+  if (!SCANNER.history.length) return;
+  const wrap = document.getElementById('scanner-history');
+  const list = document.getElementById('scanner-history-list');
+  wrap.style.display = 'block';
+  list.innerHTML = SCANNER.history.slice(0,5).map(h => `
+    <div class="insight-row">
+      <div class="insight-icon" style="background:var(--green-50)">
+        <i class="ti ti-${h.type === 'meter' ? 'bolt' : h.type === 'receipt' ? 'receipt' : 'apple'}" style="color:var(--green-600);font-size:15px"></i>
+      </div>
+      <div>
+        <div class="insight-text">${sanitize(h.summary)}</div>
+        <div class="insight-sub">${sanitize(h.ts)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Close scanner on Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('scanner-modal').classList.contains('open')) {
+    closeScanner();
+  }
+});
 renderCategories();
 renderActions();
 renderInsights();
@@ -942,6 +1466,13 @@ window.saveApiKey           = saveApiKey;
 window.sendChat             = sendChat;
 window.sendQuick            = sendQuick;
 window.handleChatKey        = handleChatKey;
+window.openScanner          = openScanner;
+window.closeScanner         = closeScanner;
+window.setMode              = setMode;
+window.captureFrame         = captureFrame;
+window.handleFileUpload     = handleFileUpload;
+window.applyResult          = applyResult;
+window.retakeScan           = retakeScan;
 
 })(); // end IIFE
 </script>
