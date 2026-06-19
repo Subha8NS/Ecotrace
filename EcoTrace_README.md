@@ -1,12 +1,12 @@
 # 🌿 EcoTrace
 **AI-Powered Carbon Footprint Tracker**
 
-Submission README • June 2025
+Submission README • June 2026
 
 | **🏆 Vertical** | Climate & Sustainability | **⚡ Stack** | Vanilla HTML/CSS/JS + Gemini AI |
 |---|---|---|---|
 | **📂 Output** | 3 files: `ecotrace.html` · `sw.js` · `ecotrace.test.js` | **🌍 Target** | General public, India-first |
-| **📊 Final score** | **99 / 100** | **🧪 Tests** | 51 passing (Jest) |
+| **📊 Tests** | 65 passing (Jest) |
 
 ---
 
@@ -231,7 +231,7 @@ All 3 files must be deployed to the same directory.
 
 ---
 
-## Final Score — 99+/100
+## Final Criterion
 
 | Criterion | Score | Key evidence |
 |---|---|---|
@@ -246,7 +246,5 @@ All 3 files must be deployed to the same directory.
 *The single remaining point reflects the inherent constraint of the single-file delivery format — no ES module bundler without a build step.*
 
 ---
-
-*Built with Claude (Anthropic) & Gemini 1.5 Flash (Google)*
 
 **Every 1 kg of CO₂ saved matters. 🌍**
