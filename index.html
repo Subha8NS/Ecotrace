@@ -1406,66 +1406,27 @@ async function analyseImage(base64Data, mimeType) {
  * @example
  * renderScanResult('{"product":"Apple","carbon_kg":0.5,"rating":"Low"}');
  */
-function renderScanResult(text) {
-  const resultEl = document.getElementById('scan-result-card');
-  const actionsEl = document.getElementById('scanner-actions');
-  let parsed = null;
+const RENDER_FOOD = p => `<div class="scanner-result-card"><div class="scanner-result-title">${sanitize(p.product||'Food')}</div><div class="scanner-result-body"><strong>Ingredients:</strong> ${sanitize(p.ingredients||'—')}<br><strong>Carbon:</strong> ${p.carbon_kg}kg CO₂e<br>${sanitize(p.summary||'')} 💡 ${sanitize(p.suggestion||'')}</div><span class="scanner-result-badge badge-${p.rating==='Low'?'green':p.rating==='Medium'?'amber':'red'}">${p.rating||'—'}</span></div>`;
 
-  try {
-    // Strip any markdown code fences before parsing
-    const clean = text.replace(/```json|```/g, '').trim();
-    parsed = JSON.parse(clean);
-    SCANNER.pendingData = parsed;
-  } catch {
-    // Show raw text if JSON fails
-    resultEl.innerHTML = `<div class="scanner-result-card">
-      <div class="scanner-result-title">Analysis result</div>
-      <div class="scanner-result-body">${sanitize(text)}</div>
-    </div>`;
-    actionsEl.style.display = 'flex';
+const RENDER_RECEIPT = p => {const items=(Array.isArray(p.items)?p.items:[]).slice(0,5);return`<div class="scanner-result-card"><div class="scanner-result-title">Receipt—${items.length}item${items.length!==1?'s':''}</div><div class="scanner-result-body">${items.map(i=>`•${sanitize(i.name)}—${i.carbon_kg}kg`).join('<br>')}<br><strong>Total:${p.total_carbon_kg}kg CO₂e</strong><br>${sanitize(p.summary||'')}💡${sanitize(p.top_tip||'')}</div><span class="scanner-result-badge badge-${p.rating==='Low'?'green':p.rating==='Medium'?'amber':'red'}">${p.rating||'—'}</span></div>`;};
+
+const RENDER_METER = p => `<div class="scanner-result-card"><div class="scanner-result-title">Meter:${p.reading_kwh}kWh</div><div class="scanner-result-body"><strong>Type:</strong>${sanitize(p.meter_type||'—')}<br><strong>Est.monthly:</strong>${p.monthly_estimate_kwh||'—'}kWh<br>${sanitize(p.notes||'')}</div><span class="scanner-result-badge badge-blue">Confidence:${sanitize(p.confidence||'—')}</span></div>`;
+
+function displayScanResult(parsed) {
+  document.getElementById('scan-result-card').innerHTML = ({food:RENDER_FOOD,receipt:RENDER_RECEIPT,meter:RENDER_METER}[SCANNER.type]||RENDER_FOOD)(parsed);
+  document.getElementById('scanner-actions').style.display = 'flex';
+}
+
+function renderScanResult(text) {
+  const parsed = parseGeminiResponse(text);
+  if (!parsed) {
+    document.getElementById('scan-result-card').innerHTML = `<div class="scanner-result-card"><div class="scanner-result-title">Result</div><div class="scanner-result-body">${sanitize(text)}</div></div>`;
+    document.getElementById('scanner-actions').style.display = 'flex';
     document.getElementById('apply-btn').style.display = 'none';
     return;
   }
-
-  let html = '<div class="scanner-result-card">';
-  const ratingColor = { Low:'badge-green', Medium:'badge-amber', High:'badge-red' };
-
-  if (SCANNER.type === 'food') {
-    html += `<div class="scanner-result-title">${sanitize(parsed.product || 'Food item')}</div>
-    <div class="scanner-result-body">
-      <strong>Ingredients:</strong> ${sanitize(parsed.ingredients || '—')}<br>
-      <strong>Serving:</strong> ${sanitize(String(parsed.serving || '—'))}<br>
-      <strong>Carbon footprint:</strong> ${parsed.carbon_kg} kg CO₂e per serving<br>
-      <em>${sanitize(parsed.summary || '')}</em><br>
-      💡 ${sanitize(parsed.suggestion || '')}
-    </div>
-    <span class="scanner-result-badge ${ratingColor[parsed.rating] || 'badge-blue'}">${parsed.rating || '—'} carbon</span>`;
-  } else if (SCANNER.type === 'receipt') {
-    const items = Array.isArray(parsed.items) ? parsed.items : [];
-    html += `<div class="scanner-result-title">Receipt — ${items.length} item${items.length !== 1 ? 's' : ''}</div>
-    <div class="scanner-result-body">
-      ${items.slice(0,5).map(i => `• ${sanitize(i.name)} — ${i.carbon_kg} kg CO₂e`).join('<br>')}
-      ${items.length > 5 ? `<br><em>+${items.length - 5} more items</em>` : ''}
-      <br><br><strong>Total: ${parsed.total_carbon_kg} kg CO₂e</strong><br>
-      <em>${sanitize(parsed.summary || '')}</em><br>
-      💡 ${sanitize(parsed.top_tip || '')}
-    </div>
-    <span class="scanner-result-badge ${ratingColor[parsed.rating] || 'badge-blue'}">${parsed.rating || '—'} impact shop</span>`;
-  } else if (SCANNER.type === 'meter') {
-    html += `<div class="scanner-result-title">Meter reading: ${parsed.reading_kwh} kWh</div>
-    <div class="scanner-result-body">
-      <strong>Type:</strong> ${sanitize(parsed.meter_type || 'Unknown')}<br>
-      <strong>Confidence:</strong> ${sanitize(parsed.confidence || '—')}<br>
-      <strong>Est. monthly usage:</strong> ${parsed.monthly_estimate_kwh || '—'} kWh<br>
-      <em>${sanitize(parsed.notes || '')}</em>
-    </div>
-    <span class="scanner-result-badge badge-blue">Confidence: ${sanitize(parsed.confidence || '—')}</span>`;
-  }
-
-  html += '</div>';
-  resultEl.innerHTML = html;
-  actionsEl.style.display = 'flex';
-  document.getElementById('apply-btn').style.display = parsed ? 'inline-flex' : 'none';
+  SCANNER.pendingData = parsed;
+  displayScanResult(parsed);
 }
 
 /** Shows an error state in the result area */
