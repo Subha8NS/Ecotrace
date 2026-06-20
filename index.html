@@ -1127,36 +1127,9 @@ const SCANNER = {
 
 /** Scanner type metadata */
 const SCAN_TYPES = {
-  food: {
-    title: 'Food label scanner',
-    hint: 'Centre the food label in the frame',
-    prompt: `You are a carbon footprint expert. Analyse this food product label image.
-Extract: 1) product name, 2) key ingredients, 3) serving size if visible.
-Then estimate the carbon footprint in kg CO2e per serving.
-Rate it: Low (<0.5kg), Medium (0.5-2kg), or High (>2kg).
-Finally, say whether this increases or decreases the user's junk/processed food intake.
-Respond in this exact JSON format (no markdown):
-{"product":"name","ingredients":"top 3","serving":"amount","carbon_kg":0.0,"rating":"Low|Medium|High","processed":true|false,"summary":"one sentence insight","suggestion":"one actionable tip"}`
-  },
-  receipt: {
-    title: 'Receipt scanner',
-    hint: 'Hold the receipt flat and steady',
-    prompt: `You are a carbon footprint expert. Analyse this grocery or restaurant receipt image.
-Extract all food/drink items you can read.
-For each item estimate its carbon footprint.
-Then give a total carbon score for the shop/meal.
-Respond in this exact JSON format (no markdown):
-{"items":[{"name":"item","carbon_kg":0.0,"category":"meat|dairy|produce|processed|beverage|other"}],"total_carbon_kg":0.0,"rating":"Low|Medium|High","summary":"one sentence about the overall carbon impact","top_tip":"single best swap to reduce carbon"}`
-  },
-  meter: {
-    title: 'Electricity meter scanner',
-    hint: 'Point at the meter display — keep steady',
-    prompt: `You are an energy reading expert. Analyse this electricity meter image.
-Extract the numeric kWh reading shown on the display.
-Also note the meter type if visible (digital/analogue/smart).
-Respond in this exact JSON format (no markdown):
-{"reading_kwh":0,"meter_type":"digital|analogue|smart|unknown","confidence":"high|medium|low","notes":"any relevant observation","monthly_estimate_kwh":0}`
-  }
+  food: { title: 'Food label scanner', hint: 'Centre the food label in the frame' },
+  receipt: { title: 'Receipt scanner', hint: 'Hold the receipt flat and steady' },
+  meter: { title: 'Electricity meter scanner', hint: 'Point at the meter display — keep steady' }
 };
 
 /**
@@ -1301,9 +1274,9 @@ function captureFrame() {
  */
 function handleFileUpload(event) {
   const file = event.target.files[0];
-  if (!file) return;
-  if (file.size > 4 * 1024 * 1024) {
-    alert('Image too large — please use an image under 4MB.');
+  const error = validateImageFile(file);
+  if (error) {
+    alert('❌ ' + error);
     return;
   }
   const reader = new FileReader();
@@ -1334,25 +1307,48 @@ function showPreview(dataUrl) {
 }
 
 /**
- * Sends image to Gemini Vision API with type-specific prompt.
- * Enforces rate limiting (max 10 calls/60s) to prevent API quota exhaustion.
- * 
- * @function analyseImage
- * @param {string} base64Data - Base64-encoded image data (no data: prefix)
- * @param {string} mimeType - Image MIME type ('image/jpeg' | 'image/png' | 'image/webp')
- * 
- * @returns {Promise<void>}
- * 
- * @throws {Error} If API response empty or malformed
- * @throws {Alert} If rate limit exceeded
- * 
- * @example
- * analyseImage('iVBORw0KGgo...', 'image/jpeg');
- * 
- * @side-effects
- * - Updates SCANNER.lastResult with raw Gemini response
- * - Calls renderScanResult() to display parsed findings
- * - Shows error state if analysis fails
+ * Returns type-specific prompt for Gemini Vision API
+ * @param {string} type - Scanner type
+ * @param {string} text - Article text to analyze
+ * @returns {string} Prompt for Gemini
+ */
+function getPromptForType(type, text) {
+  const prompts = {
+    food: `Carbon expert: analyze this food label. Extract: product name, ingredients, serving size. Estimate carbon kg/serving. Rate: Low (<0.5kg), Medium (0.5-2kg), High (>2kg). Return JSON only: {"product":"","ingredients":"","serving":"","carbon_kg":0,"rating":"","processed":true|false,"summary":"","suggestion":""}`,
+    receipt: `Carbon expert: analyze this receipt. Extract items, estimate carbon each. Total score. Return JSON: {"items":[{"name":"","carbon_kg":0,"category":""}],"total_carbon_kg":0,"rating":"","summary":"","top_tip":""}`,
+    meter: `Energy expert: read this meter. Extract kWh reading, meter type (digital/analogue/smart). Return JSON: {"reading_kwh":0,"meter_type":"","confidence":"high|medium|low","notes":"","monthly_estimate_kwh":0}`
+  };
+  return (prompts[type] || prompts.food) + `\n\nImage: ${text.slice(0,500)}`;
+}
+
+/**
+ * Safely parses Gemini response JSON with fallback to plain text
+ * @param {string} response - Raw response from Gemini
+ * @returns {Object|null} Parsed JSON or null
+ */
+function parseGeminiResponse(response) {
+  try {
+    const clean = response.replace(/```json|```/g, '').trim();
+    return JSON.parse(clean);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Validates image before processing
+ * @param {File} file - Image file
+ * @returns {string|null} Error message or null if valid
+ */
+function validateImageFile(file) {
+  if (!file) return 'No file selected';
+  if (file.size > 4 * 1024 * 1024) return 'File > 4MB';
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return 'Invalid format (JPEG/PNG/WEBP only)';
+  return null;
+}
+
+/**
+ * Sends image to Gemini Vision API with type-specific analysis
  */
 async function analyseImage(base64Data, mimeType) {
   if (isRateLimited()) {
